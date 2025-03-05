@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 )
 
-func Listen(port int16){
+func Listen(){
 	fd,err := syscall.Socket(syscall.AF_INET,syscall.SOCK_RAW,syscall.IPPROTO_TCP)
 	if err!=nil {
 		panic("failed to create file descriptor "+err.Error())
@@ -15,7 +15,14 @@ func Listen(port int16){
 	if err := syscall.SetsockoptInt(fd,syscall.IPPROTO_IP,syscall.IP_HDRINCL,1) ;err != nil{
 		panic("failed to set ip header include "+err.Error())
 	}
-	fmt.Println("server is listening on port ")
+	addr := syscall.SockaddrInet4{
+		Port: 8080,
+		Addr: [4]byte{127,0,0,1},
+	}
+	if err := syscall.Bind(fd,&addr);err != nil{
+		panic("failed to bind " + err.Error())
+	}
+	fmt.Println("server is listening on port 8080")
 	for{
 		buf := make([]byte,1500)
 		n,from,err := syscall.Recvfrom(fd,buf,0)
