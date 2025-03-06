@@ -15,13 +15,6 @@ func Listen(){
 	if err := syscall.SetsockoptInt(fd,syscall.IPPROTO_IP,syscall.IP_HDRINCL,1) ;err != nil{
 		panic("failed to set ip header include "+err.Error())
 	}
-	addr := syscall.SockaddrInet4{
-		Port: 8080,
-		Addr: [4]byte{127,0,0,1},
-	}
-	if err := syscall.Bind(fd,&addr);err != nil{
-		panic("failed to bind " + err.Error())
-	}
 	fmt.Println("server is listening on port 8080")
 	for{
 		buf := make([]byte,1500)
@@ -33,11 +26,15 @@ func Listen(){
 			fmt.Println("ip and tcp header shorter than 40")
 		}
 		tcpHeader := parseTCPHeader(buf[20:]);
-		fmt.Printf("recieved tcp packet from %v\n",from);
-		fmt.Printf("source port %d\n",tcpHeader.src_port);
-		fmt.Printf("destination port %d\n",tcpHeader.src_dest);
-		fmt.Printf("flags  %08b\n",tcpHeader.flags);
-		fmt.Println(syscall.TCP_SYNCNT)
+		if tcpHeader.Dest_port==8080 {
+			
+			fmt.Printf("recieved tcp packet from %v\n",from);
+			fmt.Println("haffy youre a big dummy")
+			/*fmt.Printf("source port %d\n",tcpHeader.Src_port);
+			fmt.Printf("destination port %d\n",tcpHeader.Dest_port);
+			fmt.Printf("flags  %08b\n",tcpHeader.Flags);
+			fmt.Println(syscall.TCP_SYNCNT)*/
+		}
 	}
 
 }
@@ -47,16 +44,16 @@ func parseTCPHeader(data []byte) *TCPheader {
 		return nil
 	}
 	header := &TCPheader{
-		src_port: binary.BigEndian.Uint16(data[0:2]),
-		src_dest: binary.BigEndian.Uint16(data[2:4]),
-		seq: binary.BigEndian.Uint32(data[4:8]),
-		ack: binary.BigEndian.Uint32(data[8:12]),
-		hlen: uint8((data[12] & 0xF0)>> 4), 
-		res: uint8((data[12] & 0x0F)>> 1), 
-		flags: uint8((data[13] & 0x3F)), 
-		window: binary.BigEndian.Uint16(data[14:16]),
-		checksum: binary.BigEndian.Uint16(data[16:18]),
-		urg: binary.BigEndian.Uint16(data[18:20]),
+		Src_port: binary.BigEndian.Uint16(data[0:2]),
+		Dest_port: binary.BigEndian.Uint16(data[2:4]),
+		Seq: binary.BigEndian.Uint32(data[4:8]),
+		Ack: binary.BigEndian.Uint32(data[8:12]),
+		Hlen: uint8((data[12] & 0xF0)>> 4), 
+		Res: uint8((data[12] & 0x0F)>> 1), 
+		Flags: uint8((data[13] & 0x3F)), 
+		Window: binary.BigEndian.Uint16(data[14:16]),
+		Checksum: binary.BigEndian.Uint16(data[16:18]),
+		Urg: binary.BigEndian.Uint16(data[18:20]),
 	}
 	return header
 }

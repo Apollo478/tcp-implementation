@@ -6,5 +6,5 @@ import (
 )
 func main(){
 	fmt.Println("hello there");
-	tcp.Listen(1200)
+	tcp.Listen()
 }
