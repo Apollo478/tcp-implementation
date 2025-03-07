@@ -2,9 +2,13 @@ package main
 
 import (
 	"fmt"
-	"tcp-server/tcp"
+	"tcp-server/server"
 )
 func main(){
 	fmt.Println("hello there");
-	tcp.Listen()
+	s,err := server.NewServer(8080)
+	if err != nil{
+		fmt.Println(err.Error())
+	}
+	s.Listen()
 }

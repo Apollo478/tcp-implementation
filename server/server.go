@@ -1,30 +1,37 @@
-package tcp
+package server
 
 import (
 	"fmt"
 	"sync"
 	"syscall"
+	"tcp-server/tcp"
 )
 
-var activeConnections = make(map[uint16]bool)
 var connMutex sync.Mutex
-
-func Listen() {
+type Server struct {
+	fd int
+	port uint16
+	activeConnections map[uint16]bool
+}
+func NewServer(port uint16) (*Server, error){
 	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_TCP)
 	if err != nil {
-		panic("failed to create file descriptor " + err.Error())
+		return nil, fmt.Errorf("failed to create socket %v",err)
 	}
-	defer syscall.Close(fd)
 
 	if err := syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_HDRINCL, 1); err != nil {
-		panic("failed to set IP_HDRINCL " + err.Error())
+		syscall.Close(fd)
+		return nil, fmt.Errorf("failed to set ip header inclusion %v",err)
 	}
+	return &Server{fd: fd, port:port, activeConnections:  make(map[uint16]bool)} ,nil
+}
+func (s *Server)Listen() {
 
-	fmt.Println("Server is listening on port 8080")
+	fmt.Printf("Server is listening on port %d",s.port)
 
 	for {
 		buf := make([]byte, 1500)
-		n, from, err := syscall.Recvfrom(fd, buf, 0)
+		n, from, err := syscall.Recvfrom(s.fd, buf, 0)
 		if err != nil {
 			fmt.Printf("Error receiving message: %s\n", err.Error())
 			continue
@@ -34,10 +41,10 @@ func Listen() {
 			continue
 		}
 
-		tcpHeader := ParseTCPHeader(buf[20:])
-		if tcpHeader.Dest_port == 8080 {
+		tcpHeader := tcp.ParseTCPHeader(buf[20:])
+		if tcpHeader.Dest_port == s.port {
 			connMutex.Lock()
-			if activeConnections[tcpHeader.Src_port] {
+			if s.activeConnections[tcpHeader.Src_port] {
 				connMutex.Unlock()
 				continue
 			}
@@ -49,18 +56,15 @@ func Listen() {
 			fmt.Printf("Flags: %d\n", tcpHeader.Flags)
 			fmt.Printf("Data Size: %d\n", len(buf))
 
-			if tcpHeader.Flags == TCP_SYN {
-				connMutex.Lock()
-				activeConnections[tcpHeader.Src_port] = true
-				connMutex.Unlock()
+			if tcpHeader.Flags == tcp.TCP_SYN {
 
-				go handleConnection(*tcpHeader)
+				go s.handleConnection(*tcpHeader)
 			}
 		}
 	}
 }
 
-func handleConnection(h TCPheader) {
+func  (s *Server) handleConnection(h tcp.TCPheader) {
 	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_TCP)
 	if err != nil {
 		panic("failed to create file descriptor " + err.Error())
@@ -78,7 +82,7 @@ func handleConnection(h TCPheader) {
 		Addr: [4]byte{127, 0, 0, 1},
 	}
 
-	synAckPacket := ContructTCPHeader(h.Dest_port, h.Src_port, uint32(0x1001), h.Seq+1, uint8(5), uint8(0), TCP_SYNACK, uint16(0), uint16(0), uint16(0))
+	synAckPacket := tcp.ContructTCPHeader(h.Dest_port, h.Src_port, uint32(0x1001), h.Seq+1, uint8(5), uint8(0), tcp.TCP_SYNACK, uint16(0), uint16(0), uint16(0))
 	if err := syscall.Sendto(fd, synAckPacket, 0, &destAddr); err != nil {
 		panic("failed to send SYN-ACK packet " + err.Error())
 	}
@@ -95,8 +99,11 @@ func handleConnection(h TCPheader) {
 			continue
 		}
 
-		ackHeader := ParseTCPHeader(buf[20:])
-		if ackHeader.Src_port == h.Src_port && ackHeader.Ack == uint32(0x1001)+1 && ackHeader.Flags == TCP_ACK {
+		ackHeader := tcp.ParseTCPHeader(buf[20:])
+		if ackHeader.Src_port == h.Src_port && ackHeader.Ack == uint32(0x1001)+1 && ackHeader.Flags == tcp.TCP_ACK {
+			s.activeConnections[h.Src_port] = true
+			connMutex.Lock()
+			connMutex.Unlock()
 			fmt.Println("Connection established with", from)
 			/*connMutex.Lock()
 			delete(activeConnections, h.Src_port)

@@ -1,5 +1,0 @@
-package tcp
-
-func Client(){
-	
-}
