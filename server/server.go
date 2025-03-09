@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"sync"
 	"syscall"
-	"tcp-server/client"
 	"tcp-server/tcp"
+	"tcp-server/client_t"
 )
 
 var connMutex sync.Mutex
+var isn = 5000
 type Server struct {
 	fd int
 	port uint16
