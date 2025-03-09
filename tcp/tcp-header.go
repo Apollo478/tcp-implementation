@@ -1,6 +1,9 @@
 package tcp
-import(
-	"encoding/binary"	
+
+import (
+	"encoding/binary"
+	"fmt"
+	"syscall"
 )
 
 type TCPheader struct {
@@ -69,4 +72,20 @@ func ParseTCPHeader(data []byte) *TCPheader {
 		Urg: binary.BigEndian.Uint16(data[18:20]),
 	}
 	return header
+}
+func  Send(srcPort uint16,destPort  uint16,fd int,msg string) error{
+	seq:= /*rand.Int() % math.MaxInt32*/ 12
+	msgPacket := ContructTCPHeader(srcPort, destPort, uint32(seq), 0, uint8(5), uint8(0), TCP_PSH, uint16(0), uint16(0), uint16(0))
+	msgBytes := []byte(msg)
+	packet := append(msgPacket,msgBytes...)
+	fmt.Println(destPort,srcPort)
+	destAddr := syscall.SockaddrInet4{
+		Port: int(destPort),
+		Addr: [4]byte{127, 0, 0, 1},
+	}
+
+	if err := syscall.Sendto(fd, packet, 0, &destAddr); err != nil {
+		return err
+	}
+	return nil;
 }

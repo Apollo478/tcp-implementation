@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 	"syscall"
+	"tcp-server/client"
 	"tcp-server/tcp"
 )
 
@@ -69,6 +70,10 @@ func  (s *Server) handleConnection(h tcp.TCPheader) {
 	if err != nil {
 		panic("failed to create file descriptor " + err.Error())
 	}
+	client := client.Client_t{
+		Fd: fd,
+		Port: h.Src_port,
+	}
 	defer syscall.Close(fd)
 
 	if err := syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_HDRINCL, 1); err != nil {
@@ -99,17 +104,21 @@ func  (s *Server) handleConnection(h tcp.TCPheader) {
 			continue
 		}
 
-		ackHeader := tcp.ParseTCPHeader(buf[20:])
-		if ackHeader.Src_port == h.Src_port && ackHeader.Ack == uint32(0x1001)+1 && ackHeader.Flags == tcp.TCP_ACK {
-			s.activeConnections[h.Src_port] = true
+		retHeader := tcp.ParseTCPHeader(buf[20:])
+		if retHeader.Src_port == h.Src_port && retHeader.Ack == uint32(0x1001)+1 && retHeader.Flags == tcp.TCP_ACK {
 			connMutex.Lock()
+				s.activeConnections[h.Src_port] = true
 			connMutex.Unlock()
 			fmt.Println("Connection established with", from)
 			/*connMutex.Lock()
 			delete(activeConnections, h.Src_port)
 			connMutex.Unlock()*/
-			break
+		}
+		if s.activeConnections[retHeader.Src_port]&& retHeader.Src_port == client.Port && retHeader.Flags==tcp.TCP_PSH{
+			msg := string(buf[40:])	
+			fmt.Printf("%d: %s",retHeader.Src_port,msg)
 		}
 	}
 }
+
 
