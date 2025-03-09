@@ -29,7 +29,7 @@ func NewServer(port uint16) (*Server, error){
 }
 func (s *Server)Listen() {
 
-	fmt.Printf("Server is listening on port %d",s.port)
+	fmt.Printf("Server is listening on port %d\n",s.port)
 
 	for {
 		buf := make([]byte, 1500)
@@ -53,13 +53,7 @@ func (s *Server)Listen() {
 			connMutex.Unlock()
 
 			fmt.Printf("Received TCP packet from %v\n", from)
-			fmt.Printf("Source Port: %d\n", tcpHeader.Src_port)
-			fmt.Printf("Destination Port: %d\n", tcpHeader.Dest_port)
-			fmt.Printf("Flags: %d\n", tcpHeader.Flags)
-			fmt.Printf("Data Size: %d\n", len(buf))
-
 			if tcpHeader.Flags == tcp.TCP_SYN {
-
 				go s.handleConnection(*tcpHeader)
 			}
 		}
@@ -71,6 +65,7 @@ func  (s *Server) handleConnection(h tcp.TCPheader) {
 	if err != nil {
 		panic("failed to create file descriptor " + err.Error())
 	}
+	var isn = 5000
 	client := client.Client_t{
 		Fd: fd,
 		Port: h.Src_port,
@@ -88,11 +83,12 @@ func  (s *Server) handleConnection(h tcp.TCPheader) {
 		Addr: [4]byte{127, 0, 0, 1},
 	}
 
-	synAckPacket := tcp.ContructTCPHeader(h.Dest_port, h.Src_port, uint32(0x1001), h.Seq+1, uint8(5), uint8(0), tcp.TCP_SYNACK, uint16(0), uint16(0), uint16(0))
+	synAckPacket := tcp.ContructTCPHeader(h.Dest_port, h.Src_port, uint32(isn), h.Seq+1, uint8(5), uint8(0), tcp.TCP_SYNACK, uint16(0), uint16(0), uint16(0))
 	if err := syscall.Sendto(fd, synAckPacket, 0, &destAddr); err != nil {
 		panic("failed to send SYN-ACK packet " + err.Error())
 	}
-
+	isn++
+	fmt.Println("sent syn ack")
 	for {
 		buf := make([]byte, 1500)
 		n, from, err := syscall.Recvfrom(fd, buf, 0)
@@ -118,6 +114,10 @@ func  (s *Server) handleConnection(h tcp.TCPheader) {
 		if s.activeConnections[retHeader.Src_port]&& retHeader.Src_port == client.Port && retHeader.Flags==tcp.TCP_PSH{
 			msg := string(buf[40:])	
 			fmt.Printf("%d: %s",retHeader.Src_port,msg)
+			ackPacket := tcp.ContructTCPHeader(s.port, h.Src_port, uint32(isn), uint32(h.Seq)+uint32(n-40), uint8(5), uint8(0), tcp.TCP_SYNACK, uint16(0), uint16(0), uint16(0))
+			if err := syscall.Sendto(fd, ackPacket, 0, &destAddr); err != nil {
+				panic("failed to send SYN-ACK packet " + err.Error())
+			}
 		}
 	}
 }
