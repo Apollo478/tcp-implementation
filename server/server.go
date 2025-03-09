@@ -107,9 +107,6 @@ func  (s *Server) handleConnection(h tcp.TCPheader) {
 				s.activeConnections[h.Src_port] = true
 			connMutex.Unlock()
 			fmt.Println("Connection established with", from)
-			/*connMutex.Lock()
-			delete(activeConnections, h.Src_port)
-			connMutex.Unlock()*/
 		}
 		if s.activeConnections[retHeader.Src_port]&& retHeader.Src_port == client.Port && retHeader.Flags==tcp.TCP_PSH{
 			msg := string(buf[40:])	

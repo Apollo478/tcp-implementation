@@ -9,6 +9,7 @@ import (
 	"time"
 )
 var serverPort = 42069
+var timeoutTimer = time.NewTimer(5* time.Second)
 type Client_t struct {
 	Fd int
 	Port uint16
@@ -36,29 +37,31 @@ func (c *Client_t) connect(){
 		Addr: [4]byte{127,0,0,1},
 	}
 	var isn = 1000
-	start := time.Now()
 	synPacket := tcp.ContructTCPHeader(uint16(c.Port),uint16(serverPort),uint32(isn),uint32(0),uint8(5),uint8(0),tcp.TCP_SYN,uint16(0),uint16(0),uint16(0))
 	if err := syscall.Sendto(c.Fd,synPacket,0,&dstAddr);err!=nil{
 		panic("unable to send packet "+err.Error())
 	}
 	fmt.Println("packet sent")
 	isn++
+
 	for {
-		if time.Since(start) > 5*time.Second {
-			panic("Timeout waiting for server response")
-		}
 		buf := make([]byte,1500)
-		n,from,err := syscall.Recvfrom(c.Fd,buf,0)
-		if err!=nil{
-			fmt.Printf("Error recieving message %s\n",err.Error());
-		}
-		if n < 40 {
-			fmt.Println("ip and tcp header shorter than 40")
-		}
+		packetChan := make(chan []byte,1)
+		go func(){
+			n,_,err := syscall.Recvfrom(c.Fd,buf,0)
+			if err!=nil{
+				fmt.Printf("Error recieving message %s\n",err.Error());
+			}
+			if n < 40 {
+				fmt.Println("ip and tcp header shorter than 40")
+			}
+			packetChan<- buf[:n]
+		
+		}()
+		buf = <-packetChan
 		tcpHeader := tcp.ParseTCPHeader(buf[20:]);
+
 		if tcpHeader.Src_port == uint16(serverPort){
-			start = time.Now()
-			fmt.Printf("recieved packet from %v",from)
 			if tcpHeader.Flags == tcp.TCP_PSH {
 				msgBytes := buf[40:]
 				msg := string(msgBytes)
@@ -68,6 +71,7 @@ func (c *Client_t) connect(){
 				if tcpHeader.Ack != uint32(isn){
 					fmt.Println("invalid ack")
 				}
+				timeoutTimer.Stop()
 			}
 			if tcpHeader.Flags == tcp.TCP_SYNACK  && tcpHeader.Ack == uint32(isn){
 				fmt.Println("recieved connection reply from server")	
@@ -77,7 +81,14 @@ func (c *Client_t) connect(){
 					panic("failed to send packet "+err.Error())
 				}
 				par := uint32(isn)
+				timeoutTimer.Stop()
 				go c.communicate(&par)
+			}
+		}else {
+			select {
+				case  <-timeoutTimer.C:
+					panic("timeout error")
+				default:
 			}
 		}
 	}
@@ -93,6 +104,7 @@ func (c *Client_t) communicate(seq *uint32){
 		if err := tcp.Send(uint16(c.Port), uint16(serverPort), c.Fd, msg); err != nil {
 			panic("Failed to send message: " + err.Error())
 		}
+		timeoutTimer.Reset(5*time.Second)
 		*seq +=uint32(len([]byte(msg)))
 	}
 }
