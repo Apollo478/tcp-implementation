@@ -1,3 +1,3 @@
-module tcp-server
+module github.com/Apollo478/tcp-implementation
 
-go 1.24.0
+go 1.24.3
